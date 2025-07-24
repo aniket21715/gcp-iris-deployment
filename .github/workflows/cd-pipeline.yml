@@ -55,21 +55,30 @@ jobs:
         sed -i "s|__IMAGE_TAG__|${{ env.IMAGE_TAG }}|g" k8s/deployment.yaml
         kubectl apply -f k8s/deployment.yaml
 
-    - name: CML - Create Deployment Report
+    # --- THIS IS THE NEW, CORRECT WAY TO USE CML ---
+    - name: Setup Node.js for CML
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: CML - Install and Send Report
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        pip install cml # <--- THIS IS THE FINAL FIX
+        # Install CML using Node.js package manager
+        npm install -g @dvcai/cml
+
         echo "Waiting 60s for the LoadBalancer to get an external IP..."
         sleep 60
+        
         EXTERNAL_IP=$(kubectl get service iris-api-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
         if [ -z "$EXTERNAL_IP" ]; then
           echo "Error: Could not retrieve external IP." && exit 1
         fi
         
         cat > report.md <<- EOM
-        ### ✅ API Deployment Successful! Congratulations!
-        You have successfully built a full end-to-end CI/CD pipeline.
+        ### ✅🏆 DEPLOYMENT COMPLETE! 🏆✅
+        CONGRATULATIONS! You have successfully debugged every layer and built a full CI/CD pipeline.
         
         - **Commit:** \`${{ github.sha }}\`
         - **Live API Endpoint:** http://${EXTERNAL_IP}
@@ -81,4 +90,5 @@ jobs:
         \`\`\`
         EOM
         
+        # Use the Node.js version of CML to post the comment
         cml comment create report.md
