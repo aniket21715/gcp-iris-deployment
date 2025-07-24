@@ -46,7 +46,6 @@ jobs:
     - name: Push Docker image to Artifact Registry
       run: docker push ${{ env.IMAGE_TAG }}
 
-    # ----- THIS IS THE NEW STEP THAT FIXES THE ERROR -----
     - name: Install gke-gcloud-auth-plugin
       run: gcloud components install gke-gcloud-auth-plugin
 
@@ -60,6 +59,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        pip install cml # <--- THIS IS THE FINAL FIX
         echo "Waiting 60s for the LoadBalancer to get an external IP..."
         sleep 60
         EXTERNAL_IP=$(kubectl get service iris-api-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
