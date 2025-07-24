@@ -1,0 +1,78 @@
+name: CD - Deploy Iris API to GKE
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: iris-cluster
+  GKE_REGION: us-central1
+  GAR_LOCATION: us-central1
+  REPOSITORY: iris-api-repo
+  IMAGE_NAME: iris-api-server
+
+jobs:
+  build-and-deploy:
+    name: Build, Push, and Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Authenticate to Google Cloud
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+    - name: Set up Cloud SDK
+      uses: 'google-github-actions/setup-gcloud@v1'
+
+    - name: Configure Docker
+      run: gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
+
+    - name: Build and Tag Docker image
+      run: |
+        IMAGE_TAG=${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker build -t $IMAGE_TAG .
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+    - name: Push Docker image to Artifact Registry
+      run: docker push ${{ env.IMAGE_TAG }}
+
+    - name: Deploy to GKE
+      run: |
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --region ${{ env.GKE_REGION }}
+        sed -i "s|__IMAGE_TAG__|${{ env.IMAGE_TAG }}|g" k8s/deployment.yaml
+        kubectl apply -f k8s/deployment.yaml
+
+    - name: CML - Create Deployment Report
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Waiting 60s for the LoadBalancer to get an external IP..."
+        sleep 60
+        EXTERNAL_IP=$(kubectl get service iris-api-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        if [ -z "$EXTERNAL_IP" ]; then
+          echo "Error: Could not retrieve external IP." && exit 1
+        fi
+        
+        cat > report.md <<- EOM
+        ### ✅ API Deployment Successful
+        A new version of the Iris API has been deployed from commit \`${{ github.sha }}\`.
+        - **Live API Endpoint:** http://${EXTERNAL_IP}
+        - **Swagger Docs:** http://${EXTERNAL_IP}/docs
+        
+        **Test with curl:**
+        \`\`\`bash
+        curl -X POST "http://${EXTERNAL_IP}/predict" -H "Content-Type: application/json" -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}'
+        \`\`\`
+        EOM
+        
+        cml comment create report.md
