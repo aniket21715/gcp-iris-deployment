@@ -60,13 +60,10 @@ jobs:
       with:
         node-version: '20'
 
-    - name: CML - Install and Send Report
+    - name: CML - Create Deployment Report
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Install the correctly named CML package from NPM
-        npm install -g cml
-
         echo "Waiting 60s for the LoadBalancer to get an external IP..."
         sleep 60
         
@@ -89,4 +86,5 @@ jobs:
         \`\`\`
         EOM
         
-        cml comment create report.md
+        # Use npx to run the cml command. This is the correct, final fix.
+        npx cml comment create report.md
