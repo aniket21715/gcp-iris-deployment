@@ -55,7 +55,6 @@ jobs:
         sed -i "s|__IMAGE_TAG__|${{ env.IMAGE_TAG }}|g" k8s/deployment.yaml
         kubectl apply -f k8s/deployment.yaml
 
-    # --- THIS IS THE NEW, CORRECT WAY TO USE CML ---
     - name: Setup Node.js for CML
       uses: actions/setup-node@v4
       with:
@@ -65,8 +64,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Install CML using Node.js package manager
-        npm install -g @dvcai/cml
+        # Install the correctly named CML package from NPM
+        npm install -g cml
 
         echo "Waiting 60s for the LoadBalancer to get an external IP..."
         sleep 60
@@ -90,5 +89,4 @@ jobs:
         \`\`\`
         EOM
         
-        # Use the Node.js version of CML to post the comment
         cml comment create report.md
