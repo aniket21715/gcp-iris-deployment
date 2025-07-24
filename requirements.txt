@@ -2,6 +2,6 @@ fastapi
 uvicorn[standard]
 scikit-learn==1.1.2
 joblib
-numpy
+numpy==1.23.5
 pydantic
 cml
